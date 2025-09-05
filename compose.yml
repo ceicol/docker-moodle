@@ -1,0 +1,78 @@
+services:
+  mariadb:
+    image: bitnami/mariadb:latest
+    container_name: moodle-db
+    restart: unless-stopped
+    environment:
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+      - MARIADB_DATABASE=${MARIADB_DATABASE}
+      - MARIADB_USER=${MARIADB_USER}
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+      - MARIADB_CHARACTER_SET=utf8mb4
+      - MARIADB_COLLATE=utf8mb4_unicode_ci
+      - MARIADB_EXTRA_FLAGS=--max_connections=300
+    volumes:
+      - mariadb_data:/bitnami/mariadb
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/bitnami/mariadb/bin/mysqladmin ping -uroot -p\"$MARIADB_ROOT_PASSWORD\" -h localhost --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+
+  moodle:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - EXTRA_LOCALES=es_ES.UTF-8 UTF-8
+    container_name: moodle
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+      # - "8443:8443"  # descomenta solo si quieres TLS directo en el contenedor
+    environment:
+      # Depuración opcional de scripts de arranque
+      - BITNAMI_DEBUG=false
+      - MOODLE_LANG=es
+      - TZ=America/Bogota
+      - LANG=es_ES.UTF-8
+      - LANGUAGE=es_ES:es
+      - LC_ALL=es_ES.UTF-8
+      # Admin de Moodle / nombre del sitio
+      - MOODLE_USERNAME=${MOODLE_USERNAME}
+      - MOODLE_PASSWORD=${MOODLE_PASSWORD}
+      - MOODLE_EMAIL=${MOODLE_EMAIL}
+      - MOODLE_SITE_NAME=${MOODLE_SITE_NAME}
+      # URL pública (muy recomendable detrás de proxy)
+#      - MOODLE_HOST=${MOODLE_HOST}  # p.ej. https://campus.bendicionabundante.com
+      # Conexión BD
+      - MOODLE_DATABASE_TYPE=mariadb
+      - MOODLE_DATABASE_HOST=mariadb
+      - MOODLE_DATABASE_PORT_NUMBER=3306
+      - MOODLE_DATABASE_NAME=${MARIADB_DATABASE}
+      - MOODLE_DATABASE_USER=${MARIADB_USER}
+      - MOODLE_DATABASE_PASSWORD=${MARIADB_PASSWORD}
+      # SMTP opcional (para correo saliente)
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_PROTOCOL=${SMTP_PROTOCOL}  # tls|ssl|""
+      # Límites PHP
+      - PHP_UPLOAD_MAX_FILESIZE=${PHP_UPLOAD_MAX_FILESIZE}
+      - PHP_POST_MAX_SIZE=${PHP_POST_MAX_SIZE}
+    volumes:
+      - moodle_data:/bitnami   # /bitnami/moodle y /bitnami/moodledata persisten aquí
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "wget -qO- http://127.0.0.1:8080/login/index.php >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mariadb_data:
+  moodle_data:
